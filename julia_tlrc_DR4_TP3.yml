@@ -1,0 +1,472 @@
+# ==============================================================================
+# DevCalc / ricknmorty-api — TP3
+# Arquivo de entrega: julia_tlrc_DR4_TP3.yml
+#
+# Repositório: https://github.com/juliatlrc/devops
+# Cada seção corresponde a um arquivo real em .github/workflows/
+# ==============================================================================
+
+
+# ==============================================================================
+# ETAPA 1 — .github/workflows/self-hosted-demo.yml
+# Runner auto-hospedado com instalação de software adicional (jq)
+#
+# Registro do runner (executar uma vez na máquina local):
+#   mkdir actions-runner && cd actions-runner
+#   curl -o actions-runner-linux-x64-2.315.0.tar.gz -L \
+#     https://github.com/actions/runner/releases/download/v2.315.0/actions-runner-linux-x64-2.315.0.tar.gz
+#   tar xzf ./actions-runner-linux-x64-2.315.0.tar.gz
+#   ./config.sh --url https://github.com/juliatlrc/devops --token <TOKEN>
+#   ./run.sh
+# ==============================================================================
+
+name: "TP3 - Etapa 1 - Self-Hosted Runner"
+
+on:
+  workflow_dispatch:
+
+jobs:
+  demo-self-hosted:
+    name: Executa no runner local
+    runs-on: self-hosted
+
+    steps:
+      - name: Checkout do código
+        uses: actions/checkout@v4
+
+      - name: Informações do sistema operacional
+        run: uname -a
+
+      - name: Versão do Java no runner
+        run: java -version
+
+      - name: Versão do Docker no runner
+        run: docker --version
+
+      - name: Identificação do runner
+        run: |
+          echo "Runner name : ${{ runner.name }}"
+          echo "Runner OS   : ${{ runner.os }}"
+          echo "Workspace   : ${{ github.workspace }}"
+
+      - name: Instalar jq (software adicional via apt)
+        run: |
+          sudo apt-get update -y -q
+          sudo apt-get install -y jq
+          echo "jq instalado:"
+          jq --version
+
+      - name: Usar jq para listar serviços do docker-compose
+        run: |
+          cat docker-compose.yml \
+            | python3 -c "import sys,json,yaml; print(json.dumps(yaml.safe_load(sys.stdin),indent=2))" \
+            | jq '.services | keys'
+
+
+---
+
+
+# ==============================================================================
+# ETAPA 2 — .github/workflows/vars-and-secrets-demo.yml
+# Variáveis e secrets usando ${{ vars.* }} e ${{ secrets.* }}
+#
+# Configurar em Settings > Secrets and variables > Actions:
+#   Variables : APP_MODE=production  |  SUPPORT_EMAIL=suporte@ricknmorty.dev
+#   Secrets   : PROD_TOKEN=<token>
+# ==============================================================================
+
+name: "TP3 - Etapa 2 - Variaveis e Secrets"
+
+on:
+  workflow_dispatch:
+
+jobs:
+  demo-vars:
+    name: Demonstra variáveis não-sensíveis
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Exibir variáveis de repositório
+        run: |
+          echo "APP_MODE      = ${{ vars.APP_MODE }}"
+          echo "SUPPORT_EMAIL = ${{ vars.SUPPORT_EMAIL }}"
+
+      - name: Configurar modo da aplicação via variável
+        run: |
+          if [ "${{ vars.APP_MODE }}" = "production" ]; then
+            echo "Modo: PRODUÇÃO — otimizações ativas, logs reduzidos."
+          else
+            echo "Modo: DESENVOLVIMENTO — logs completos."
+          fi
+
+  demo-secrets:
+    name: Passo protegido com secret
+    runs-on: ubuntu-latest
+    needs: demo-vars
+
+    steps:
+      - name: Autenticação simulada com PROD_TOKEN
+        env:
+          TOKEN: ${{ secrets.PROD_TOKEN }}
+        run: |
+          if [ -z "$TOKEN" ]; then
+            echo "ERRO: PROD_TOKEN não definido."
+            exit 1
+          fi
+          echo "Token presente (valor mascarado): ***"
+          echo "Autenticação bem-sucedida. Deploy autorizado."
+
+
+---
+
+
+# ==============================================================================
+# ETAPA 3 — .github/workflows/env-context-demo.yml
+# Contextos e escopos: workflow-level, job-level, step-level
+# ==============================================================================
+
+name: "TP3 - Etapa 3 - Env Context Demo"
+
+on:
+  workflow_dispatch:
+
+env:
+  STAGE: test
+  APP_NAME: ricknmorty-api
+  PIPELINE_VERSION: "3.0"
+
+jobs:
+  env-demo:
+    name: Demonstra escopos de env vars
+    runs-on: ubuntu-latest
+
+    env:
+      DEPLOY_ENV: staging
+      APP_NAME: ricknmorty-api-job-override
+
+    steps:
+      - name: Exibir contexto do GitHub
+        run: |
+          echo "Usuário que acionou : ${{ github.actor }}"
+          echo "Branch / ref        : ${{ github.ref }}"
+          echo "Evento disparador   : ${{ github.event_name }}"
+          echo "SHA do commit       : ${{ github.sha }}"
+          echo "Sistema operacional : ${{ runner.os }}"
+          echo "Arquitetura         : ${{ runner.arch }}"
+
+      - name: Exibir vars de workflow e job
+        run: |
+          echo "STAGE            = $STAGE"
+          echo "PIPELINE_VERSION = $PIPELINE_VERSION"
+          echo "APP_NAME         = $APP_NAME   (job sobrescreve workflow)"
+          echo "DEPLOY_ENV       = $DEPLOY_ENV"
+
+      - name: Exibir var sobrescrita no step
+        env:
+          STAGE: production
+          STEP_ONLY: "so-aqui"
+        run: |
+          echo "STAGE     (step sobrescreve workflow) = $STAGE"
+          echo "APP_NAME  (herda do job)              = $APP_NAME"
+          echo "STEP_ONLY (só existe neste step)      = $STEP_ONLY"
+
+      - name: Confirmar que STEP_ONLY não vaza
+        run: |
+          echo "STEP_ONLY aqui = '${STEP_ONLY}' (deve estar vazio)"
+          echo "STAGE voltou a = $STAGE (deve ser 'test')"
+
+
+---
+
+
+# ==============================================================================
+# ETAPA 4 — .github/workflows/auto-issue.yml
+# Permissões do GITHUB_TOKEN e criação automática de issue
+#
+# DOCUMENTAÇÃO:
+#   - GITHUB_TOKEN é gerado automaticamente pelo GitHub a cada execução
+#   - O bloco permissions eleva apenas issues:write (menor privilégio)
+#   - O token expira ao final da execução — nunca precisa ser armazenado
+#   - Referência: docs.github.com/en/actions/security-guides/automatic-token-authentication
+# ==============================================================================
+
+name: "TP3 - Etapa 4 - Permissoes GITHUB_TOKEN"
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+permissions:
+  issues: write
+  contents: read
+
+jobs:
+  deploy-com-verificacao:
+    name: Verifica variáveis e abre issue se falhar
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout do código
+        uses: actions/checkout@v4
+
+      - name: Verificar variáveis obrigatórias
+        id: verificar-vars
+        run: |
+          FALHOU=false
+          MOTIVO=""
+          if [ -z "${{ vars.APP_MODE }}" ]; then
+            FALHOU=true
+            MOTIVO="Variável \`APP_MODE\` não definida no repositório."
+          fi
+          echo "deploy_falhou=$FALHOU" >> $GITHUB_OUTPUT
+          echo "motivo=$MOTIVO"        >> $GITHUB_OUTPUT
+          if [ "$FALHOU" = "true" ]; then
+            echo "AVISO: $MOTIVO"
+          else
+            echo "Todas as variáveis obrigatórias estão presentes."
+          fi
+
+      - name: Executar deploy simulado
+        if: steps.verificar-vars.outputs.deploy_falhou == 'false'
+        run: |
+          echo "APP_MODE = ${{ vars.APP_MODE }}"
+          echo "Deploy concluído com sucesso."
+
+      - name: Abrir issue de falha no deploy
+        if: steps.verificar-vars.outputs.deploy_falhou == 'true'
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const issue = await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo:  context.repo.repo,
+              title: '🚨 Falha no deploy — variável obrigatória ausente',
+              body: [
+                '## Deploy interrompido automaticamente',
+                '',
+                `**Motivo:** ${{ steps.verificar-vars.outputs.motivo }}`,
+                '',
+                `**Workflow:** \`${{ github.workflow }}\``,
+                `**Execução:** [Run #${{ github.run_number }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})`,
+                `**Branch:** \`${{ github.ref_name }}\``,
+                `**Acionado por:** @${{ github.actor }}`,
+                '',
+                '## Como corrigir',
+                '1. Acesse **Settings > Secrets and variables > Actions > Variables**',
+                '2. Crie a variável `APP_MODE` com valor `production` ou `development`',
+                '3. Execute o workflow novamente.',
+                '',
+                '> Issue criada automaticamente pelo GITHUB_TOKEN com permissão `issues: write`',
+              ].join('\n'),
+              labels: ['bug', 'ci/cd'],
+            });
+            console.log(`Issue criada: #${issue.data.number} — ${issue.data.html_url}`);
+
+
+---
+
+
+# ==============================================================================
+# ETAPA 5a — .github/workflows/deploy-dev.yml
+# Deploy automático para DEV em pushes na branch dev
+#
+# Configurar em Settings > Environments > dev:
+#   - Sem regras de proteção
+#   - Variable: DEV_API_URL = http://dev.ricknmorty.internal:8080
+# ==============================================================================
+
+name: "TP3 - Etapa 5a - Deploy DEV"
+
+on:
+  push:
+    branches:
+      - dev
+
+jobs:
+  deploy-dev:
+    name: Deploy automático para DEV
+    runs-on: ubuntu-latest
+    environment: dev
+
+    steps:
+      - name: Checkout do código
+        uses: actions/checkout@v4
+
+      - name: Informações do deploy
+        run: |
+          echo "Ambiente  : dev"
+          echo "Branch    : ${{ github.ref_name }}"
+          echo "Commit    : ${{ github.sha }}"
+          echo "Autor     : ${{ github.actor }}"
+          echo "API URL   : ${{ vars.DEV_API_URL }}"
+
+      - name: Build das imagens Docker
+        run: docker compose build
+
+      - name: Validar docker-compose
+        run: docker compose config
+
+      - name: Simular push para registry DEV
+        run: |
+          echo "docker push registry.dev/ricknmorty-api:${{ github.sha }}"
+          echo "Imagem enviada (SHA: ${{ github.sha }})"
+
+      - name: Simular restart em DEV
+        run: |
+          echo "Reiniciando em ${{ vars.DEV_API_URL }}..."
+          echo "✅ Deploy em DEV concluído automaticamente."
+
+
+---
+
+
+# ==============================================================================
+# ETAPA 5b — .github/workflows/deploy-prod.yml
+# Deploy com aprovação manual para PROD em pushes na branch main
+#
+# Configurar em Settings > Environments > prod:
+#   - Required reviewers: <seu usuário> (aprovação obrigatória)
+#   - Secret:   PROD_REGISTRY_TOKEN = <token>
+#   - Variable: PROD_API_URL = https://api.ricknmorty.dev
+# ==============================================================================
+
+name: "TP3 - Etapa 5b - Deploy PROD"
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy-prod:
+    name: Deploy com aprovação para PROD
+    runs-on: ubuntu-latest
+    environment: prod
+
+    steps:
+      - name: Checkout do código
+        uses: actions/checkout@v4
+
+      - name: Informações do deploy
+        run: |
+          echo "Ambiente  : prod"
+          echo "Branch    : ${{ github.ref_name }}"
+          echo "Commit    : ${{ github.sha }}"
+          echo "Autor     : ${{ github.actor }}"
+          echo "API URL   : ${{ vars.PROD_API_URL }}"
+
+      - name: Build das imagens Docker
+        run: docker compose build
+
+      - name: Autenticar no registry de produção
+        env:
+          REGISTRY_TOKEN: ${{ secrets.PROD_REGISTRY_TOKEN }}
+        run: |
+          if [ -z "$REGISTRY_TOKEN" ]; then
+            echo "ERRO: PROD_REGISTRY_TOKEN não definido no ambiente prod."
+            exit 1
+          fi
+          echo "Autenticado no registry de produção."
+
+      - name: Simular push para registry PROD
+        run: |
+          echo "docker push registry.prod/ricknmorty-api:${{ github.sha }}"
+          echo "Imagem enviada (SHA: ${{ github.sha }})"
+
+      - name: Simular deploy em PROD
+        run: |
+          echo "Aplicando versão em ${{ vars.PROD_API_URL }}..."
+          echo "✅ Deploy em PROD concluído após aprovação manual."
+
+
+---
+
+
+# ==============================================================================
+# ETAPA 6 — Nova funcionalidade: GET /calc/sqrt?x=16
+#
+# Arquivos Java criados/alterados:
+#
+# api/src/main/java/com/ricknmorty/api/service/CalculatorService.java
+#   public double sqrt(double x) {
+#       if (x < 0) throw new IllegalArgumentException("Número negativo: " + x);
+#       return Math.sqrt(x);
+#   }
+#
+# api/src/main/java/com/ricknmorty/api/controller/CalculatorController.java
+#   @GetMapping("/sqrt")
+#   public ResponseEntity<Map<String,Object>> sqrt(@RequestParam double x) {
+#       try {
+#           Map<String,Object> r = new LinkedHashMap<>();
+#           r.put("x", x); r.put("operation","sqrt"); r.put("result", service.sqrt(x));
+#           return ResponseEntity.ok(r);
+#       } catch (IllegalArgumentException e) {
+#           return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+#       }
+#   }
+#
+# api/src/test/java/com/ricknmorty/api/service/CalculatorServiceTest.java
+#   7 testes adicionados: sqrt(16)=4.0, sqrt(0)=0.0, sqrt(2)≈1.4142,
+#   sqrt(100)=10.0, sqrt(1)=1.0, sqrt(-1) throws, sqrt(-100) throws
+#
+# O pipeline ci.yml já cobre os testes automaticamente — nenhuma alteração
+# no workflow foi necessária para integrar a nova funcionalidade.
+# ==============================================================================
+
+name: "TP3 - Etapa 6 - Smoke Test sqrt"
+
+on:
+  workflow_dispatch:
+
+jobs:
+  smoke-test-sqrt:
+    name: Smoke Test - endpoint /calc/sqrt
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout do código
+        uses: actions/checkout@v4
+
+      - name: Subir containers
+        run: docker compose up -d --build
+
+      - name: Aguardar API ficar pronta
+        run: |
+          echo "Aguardando API..."
+          for i in $(seq 1 20); do
+            if curl -sf http://localhost:8080/api/characters > /dev/null 2>&1; then
+              echo "API respondendo."
+              break
+            fi
+            sleep 5
+          done
+
+      - name: Testar GET /calc/sqrt?x=16 (esperado 4.0)
+        run: |
+          RESPONSE=$(curl -sf "http://localhost:8080/calc/sqrt?x=16")
+          echo "Resposta: $RESPONSE"
+          RESULT=$(echo "$RESPONSE" | python3 -c "import sys,json; print(json.load(sys.stdin)['result'])")
+          if [ "$RESULT" = "4.0" ]; then
+            echo "✅ PASSOU: sqrt(16) = 4.0"
+          else
+            echo "❌ FALHOU: esperado 4.0, recebido $RESULT"
+            exit 1
+          fi
+
+      - name: Testar GET /calc/sqrt?x=0 (esperado 0.0)
+        run: |
+          RESPONSE=$(curl -sf "http://localhost:8080/calc/sqrt?x=0")
+          RESULT=$(echo "$RESPONSE" | python3 -c "import sys,json; print(json.load(sys.stdin)['result'])")
+          [ "$RESULT" = "0.0" ] && echo "✅ PASSOU: sqrt(0) = 0.0" || (echo "❌ FALHOU"; exit 1)
+
+      - name: Testar GET /calc/sqrt?x=-1 (esperado HTTP 400)
+        run: |
+          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:8080/calc/sqrt?x=-1")
+          [ "$HTTP_CODE" = "400" ] && echo "✅ PASSOU: negativo retornou 400" || (echo "❌ FALHOU: $HTTP_CODE"; exit 1)
+
+      - name: Derrubar containers
+        if: always()
+        run: docker compose down -v
