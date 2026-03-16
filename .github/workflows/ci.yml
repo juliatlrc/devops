@@ -1,0 +1,70 @@
+name: CI - Rick & Morty API
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      run_tests:
+        description: "Executar testes automatizados?"
+        required: false
+        default: true
+        type: boolean
+      run_lint:
+        description: "Executar lint (Checkstyle)?"
+        required: false
+        default: true
+        type: boolean
+
+jobs:
+  # ──────────────────────────────────────────
+  # Tarefa 1: Action externa do Marketplace
+  # Valida sintaxe dos Dockerfiles com hadolint
+  # ──────────────────────────────────────────
+  security-scan:
+    name: Lint dos Dockerfiles (Hadolint)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout do código
+        uses: actions/checkout@v4
+
+      - name: Lint Dockerfile do banco
+        uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: banco/Dockerfile
+
+      - name: Lint Dockerfile da API
+        uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: api/Dockerfile
+
+  # ──────────────────────────────────────────
+  # Tarefa 3: Chama o workflow reutilizável
+  # ──────────────────────────────────────────
+  lint-and-test:
+    name: Lint e Testes
+    uses: ./.github/workflows/lint-and-test.yml
+    with:
+      run_tests: ${{ inputs.run_tests == null || inputs.run_tests }}
+      run_lint: ${{ inputs.run_lint == null || inputs.run_lint }}
+
+  # ──────────────────────────────────────────
+  # Build final: valida o docker-compose
+  # ──────────────────────────────────────────
+  build:
+    name: Validar docker-compose
+    runs-on: ubuntu-latest
+    needs: [lint-and-test]
+    steps:
+      - name: Checkout do código
+        uses: actions/checkout@v4
+
+      - name: Instalar Docker Compose
+        run: docker compose version
+
+      - name: Validar sintaxe do docker-compose.yml
+        run: docker compose config

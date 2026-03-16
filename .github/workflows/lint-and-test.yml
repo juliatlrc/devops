@@ -1,0 +1,60 @@
+name: Lint and Test
+
+on:
+  workflow_call:
+    inputs:
+      run_tests:
+        description: "Executar testes automatizados"
+        required: false
+        default: true
+        type: boolean
+      run_lint:
+        description: "Executar análise de estilo (lint)"
+        required: false
+        default: true
+        type: boolean
+
+jobs:
+  lint:
+    name: Lint (YAML)
+    runs-on: ubuntu-latest
+    if: ${{ inputs.run_lint }}
+    steps:
+      - name: Checkout do código
+        uses: actions/checkout@v4
+
+      - name: Instalar yamllint
+        run: pip install yamllint
+
+      - name: Lint dos arquivos YAML
+        run: yamllint .github/workflows/
+
+  test:
+    name: Teste de Conectividade dos Containers
+    runs-on: ubuntu-latest
+    if: ${{ inputs.run_tests }}
+    steps:
+      - name: Checkout do código
+        uses: actions/checkout@v4
+
+      - name: Subir containers
+        run: docker compose up -d --build
+
+      - name: Aguardar banco ficar pronto
+        run: |
+          echo "Aguardando banco..."
+          for i in $(seq 1 15); do
+            if docker compose exec -T db pg_isready -U postgres -d ricknmorty; then
+              echo "Banco pronto!"
+              exit 0
+            fi
+            sleep 3
+          done
+          echo "Banco não respondeu a tempo" && exit 1
+
+      - name: Verificar containers rodando
+        run: docker compose ps
+
+      - name: Derrubar containers
+        if: always()
+        run: docker compose down -v
