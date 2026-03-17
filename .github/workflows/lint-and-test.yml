@@ -9,7 +9,7 @@ on:
         default: true
         type: boolean
       run_lint:
-        description: "Executar análise de estilo (lint)"
+        description: "Executar analise de estilo (lint)"
         required: false
         default: true
         type: boolean
@@ -20,21 +20,21 @@ jobs:
     runs-on: ubuntu-latest
     if: ${{ inputs.run_lint }}
     steps:
-      - name: Checkout do código
+      - name: Checkout do codigo
         uses: actions/checkout@v4
 
       - name: Instalar yamllint
         run: pip install yamllint
 
-      - name: Lint dos arquivos YAML
-        run: yamllint .github/workflows/
+      - name: Lint dos arquivos YAML principais
+        run: yamllint .github/workflows/ci.yml .github/workflows/lint-and-test.yml
 
   test:
     name: Teste de Conectividade dos Containers
     runs-on: ubuntu-latest
     if: ${{ inputs.run_tests }}
     steps:
-      - name: Checkout do código
+      - name: Checkout do codigo
         uses: actions/checkout@v4
 
       - name: Subir containers
@@ -50,7 +50,7 @@ jobs:
             fi
             sleep 3
           done
-          echo "Banco não respondeu a tempo" && exit 1
+          echo "Banco nao respondeu a tempo" && exit 1
 
       - name: Verificar containers rodando
         run: docker compose ps

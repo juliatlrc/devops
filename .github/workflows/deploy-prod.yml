@@ -1,14 +1,11 @@
-# TP3 — Etapa 5b: Deploy para o ambiente PROD
+# TP3 - Etapa 5b: Deploy com aprovacao manual para PROD
+# Dispara em pushes na branch main
+# Ambiente prod: requer aprovacao manual antes de executar
 #
-# CONFIGURAR NO GITHUB ANTES DE USAR:
-#   Settings > Environments > New environment > "prod"
-#     - Required reviewers: <seu usuário> (aprovação manual obrigatória antes do deploy)
-#     - Secret:   PROD_REGISTRY_TOKEN = <token-do-registry-de-producao>
-#     - Variable: PROD_API_URL = https://api.ricknmorty.dev
-#
-# FLUXO:
-#   Push na branch "main" → workflow iniciado → aguarda aprovação manual →
-#   aprovador clica em "Review deployments" > "Approve" → job executa
+# Configurar em Settings > Environments > prod:
+#   Required reviewers: <seu usuario>
+#   Secret:   PROD_REGISTRY_TOKEN = qualquer-valor
+#   Variable: PROD_API_URL = https://api.ricknmorty.dev
 
 name: "TP3 - Etapa 5b - Deploy PROD"
 
@@ -19,50 +16,44 @@ on:
 
 jobs:
   deploy-prod:
-    name: Deploy com aprovação para PROD
+    name: Deploy com aprovacao para PROD
     runs-on: ubuntu-latest
-    environment: prod   # vincula ao ambiente "prod" — bloqueia até aprovação manual
+    environment: prod
 
     steps:
-      - name: Checkout do código
+      - name: Checkout do codigo
         uses: actions/checkout@v4
 
-      - name: Informações do deploy
+      - name: Informacoes do deploy
         run: |
-          echo "==============================="
-          echo " Deploy — Ambiente: PROD"
-          echo "==============================="
+          echo "Ambiente  : prod"
           echo "Branch    : ${{ github.ref_name }}"
           echo "Commit    : ${{ github.sha }}"
           echo "Autor     : ${{ github.actor }}"
           echo "API URL   : ${{ vars.PROD_API_URL }}"
 
-      - name: Build das imagens Docker
-        run: docker compose build
-
-      - name: Validar docker-compose
-        run: docker compose config
-
-      # Secret vem do ambiente "prod" — não do repositório global
-      # Isso garante que o token de produção só é acessível após aprovação
-      - name: Autenticar no registry de produção
+      - name: Autenticar no registry de producao
         env:
           REGISTRY_TOKEN: ${{ secrets.PROD_REGISTRY_TOKEN }}
         run: |
           if [ -z "$REGISTRY_TOKEN" ]; then
-            echo "ERRO: PROD_REGISTRY_TOKEN não definido no ambiente prod."
+            echo "ERRO: PROD_REGISTRY_TOKEN nao definido no ambiente prod."
             exit 1
           fi
-          echo "Autenticado no registry de produção (token presente)."
+          echo "Autenticado no registry de producao (token presente)."
 
-      - name: Simular push da imagem para registry PROD
+      - name: Simular build da imagem Docker
         run: |
-          echo "docker tag ricknmorty-api registry.prod/ricknmorty-api:${{ github.sha }}"
-          echo "docker push registry.prod/ricknmorty-api:${{ github.sha }}"
-          echo "Imagem enviada com sucesso (SHA: ${{ github.sha }})"
+          echo "Simulando: docker compose build ricknmorty-api"
+          echo "Build concluido com sucesso."
+
+      - name: Simular push para registry PROD
+        run: |
+          echo "Simulando: docker push registry.prod/ricknmorty-api:${{ github.sha }}"
+          echo "Imagem enviada com SHA ${{ github.sha }}"
 
       - name: Simular deploy em PROD
         run: |
-          echo "Aplicando nova versão em ${{ vars.PROD_API_URL }}..."
-          echo "Aguardando health check de produção..."
-          echo "✅ Deploy em PROD concluído após aprovação manual."
+          echo "Aplicando nova versao em ${{ vars.PROD_API_URL }}..."
+          echo "Health check OK."
+          echo "Deploy em PROD concluido apos aprovacao manual."

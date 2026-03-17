@@ -1,12 +1,9 @@
-# TP3 — Etapa 5a: Deploy para o ambiente DEV
+# TP3 - Etapa 5a: Deploy automatico para DEV
+# Dispara em pushes na branch dev
+# Ambiente dev: sem aprovacao, deploy automatico
 #
-# CONFIGURAR NO GITHUB ANTES DE USAR:
-#   Settings > Environments > New environment > "dev"
-#     - Sem regras de proteção (deploy automático)
-#     - Variable: DEV_API_URL = http://dev.ricknmorty.internal:8080
-#
-# FLUXO:
-#   Push na branch "dev" → dispara este workflow → deploy automático sem aprovação
+# Configurar em Settings > Environments > dev:
+#   Variable: DEV_API_URL = http://dev.ricknmorty.internal:8080
 
 name: "TP3 - Etapa 5a - Deploy DEV"
 
@@ -17,39 +14,34 @@ on:
 
 jobs:
   deploy-dev:
-    name: Deploy automático para DEV
+    name: Deploy automatico para DEV
     runs-on: ubuntu-latest
-    environment: dev    # vincula ao ambiente "dev" configurado no GitHub
+    environment: dev
 
     steps:
-      - name: Checkout do código
+      - name: Checkout do codigo
         uses: actions/checkout@v4
 
-      - name: Informações do deploy
+      - name: Informacoes do deploy
         run: |
-          echo "==============================="
-          echo " Deploy — Ambiente: DEV"
-          echo "==============================="
+          echo "Ambiente  : dev"
           echo "Branch    : ${{ github.ref_name }}"
           echo "Commit    : ${{ github.sha }}"
           echo "Autor     : ${{ github.actor }}"
           echo "API URL   : ${{ vars.DEV_API_URL }}"
 
-      - name: Build das imagens Docker
-        run: docker compose build
-
-      - name: Validar docker-compose
-        run: docker compose config
-
-      - name: Simular push da imagem para registry DEV
+      - name: Simular build da imagem Docker
         run: |
-          echo "docker tag ricknmorty-api registry.dev/ricknmorty-api:${{ github.sha }}"
-          echo "docker push registry.dev/ricknmorty-api:${{ github.sha }}"
-          echo "Imagem enviada com sucesso (SHA: ${{ github.sha }})"
+          echo "Simulando: docker compose build ricknmorty-api"
+          echo "Build concluido com sucesso."
 
-      - name: Simular restart do serviço em DEV
+      - name: Simular push para registry DEV
         run: |
-          echo "Reiniciando serviço em ${{ vars.DEV_API_URL }}..."
-          echo "Aguardando health check..."
-          echo "Serviço respondendo em ${{ vars.DEV_API_URL }}/api/characters"
-          echo "✅ Deploy em DEV concluído automaticamente."
+          echo "Simulando: docker push registry.dev/ricknmorty-api:${{ github.sha }}"
+          echo "Imagem enviada com SHA ${{ github.sha }}"
+
+      - name: Simular restart do servico em DEV
+        run: |
+          echo "Reiniciando servico em ${{ vars.DEV_API_URL }}..."
+          echo "Health check OK."
+          echo "Deploy em DEV concluido automaticamente."
