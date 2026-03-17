@@ -1,0 +1,104 @@
+# TP3 — Etapa 4: Permissões do GITHUB_TOKEN e Criação Automática de Issue
+#
+# DOCUMENTAÇÃO DO TOKEN:
+#   - O GITHUB_TOKEN é gerado automaticamente pelo GitHub a cada execução.
+#   - Nunca precisa ser criado manualmente nem armazenado como secret.
+#   - Por padrão, possui permissão "read" na maioria dos escopos.
+#   - O bloco `permissions` abaixo eleva para "write" apenas em `issues`,
+#     seguindo o princípio de menor privilégio (mínimo necessário).
+#   - O token expira ao final da execução do workflow.
+#   - Referência: https://docs.github.com/en/actions/security-guides/automatic-token-authentication
+#
+# CONDIÇÃO PARA ABERTURA DE ISSUE:
+#   - O workflow simula uma etapa de deploy.
+#   - Se a variável APP_MODE não estiver definida, o deploy "falha".
+#   - Nesse caso, uma issue é aberta automaticamente com título e corpo descritivos.
+
+name: "TP3 - Etapa 4 - Permissoes GITHUB_TOKEN"
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+# Permissão elevada para issues: write neste workflow
+# Todos os demais escopos permanecem com o mínimo padrão (read ou none)
+permissions:
+  issues: write
+  contents: read
+
+jobs:
+  deploy-com-verificacao:
+    name: Deploy com verificação de variáveis
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout do código
+        uses: actions/checkout@v4
+
+      # Verifica se as variáveis obrigatórias estão definidas
+      # e sinaliza falha via output para o próximo step
+      - name: Verificar variáveis obrigatórias
+        id: verificar-vars
+        run: |
+          FALHOU=false
+          MOTIVO=""
+
+          if [ -z "${{ vars.APP_MODE }}" ]; then
+            FALHOU=true
+            MOTIVO="Variável \`APP_MODE\` não definida no repositório."
+          fi
+
+          echo "deploy_falhou=$FALHOU" >> $GITHUB_OUTPUT
+          echo "motivo=$MOTIVO"        >> $GITHUB_OUTPUT
+
+          if [ "$FALHOU" = "true" ]; then
+            echo "AVISO: $MOTIVO"
+            echo "O deploy será interrompido e uma issue será aberta."
+          else
+            echo "Todas as variáveis obrigatórias estão presentes."
+          fi
+
+      # Simula o deploy — só executa se as variáveis estiverem OK
+      - name: Executar deploy simulado
+        if: steps.verificar-vars.outputs.deploy_falhou == 'false'
+        run: |
+          echo "APP_MODE = ${{ vars.APP_MODE }}"
+          echo "Iniciando deploy no ambiente ${{ vars.APP_MODE }}..."
+          echo "Deploy concluído com sucesso."
+
+      # Abre issue automaticamente usando GITHUB_TOKEN com permissão issues:write
+      # Só executa quando o deploy falhou
+      - name: Abrir issue de falha no deploy
+        if: steps.verificar-vars.outputs.deploy_falhou == 'true'
+        uses: actions/github-script@v7
+        with:
+          # O GITHUB_TOKEN é injetado automaticamente — não precisa ser declarado como secret
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const issue = await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo:  context.repo.repo,
+              title: '🚨 Falha no deploy — variável obrigatória ausente',
+              body: [
+                '## Deploy interrompido automaticamente',
+                '',
+                `**Motivo:** ${{ steps.verificar-vars.outputs.motivo }}`,
+                '',
+                `**Workflow:** \`${{ github.workflow }}\``,
+                `**Execução:** [Run #${{ github.run_number }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})`,
+                `**Branch:** \`${{ github.ref_name }}\``,
+                `**Acionado por:** @${{ github.actor }}`,
+                `**Data:** ${{ github.event.head_commit.timestamp || 'workflow_dispatch' }}`,
+                '',
+                '## Como corrigir',
+                '1. Acesse **Settings > Secrets and variables > Actions > Variables**',
+                '2. Crie a variável `APP_MODE` com valor `production` ou `development`',
+                '3. Execute o workflow novamente via **Actions > Run workflow**',
+                '',
+                '> Issue criada automaticamente pelo GITHUB_TOKEN com permissão `issues: write`',
+              ].join('\n'),
+              labels: ['bug', 'ci/cd'],
+            });
+            console.log(`Issue criada: #${issue.data.number} — ${issue.data.html_url}`);

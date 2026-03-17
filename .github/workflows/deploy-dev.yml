@@ -1,0 +1,55 @@
+# TP3 — Etapa 5a: Deploy para o ambiente DEV
+#
+# CONFIGURAR NO GITHUB ANTES DE USAR:
+#   Settings > Environments > New environment > "dev"
+#     - Sem regras de proteção (deploy automático)
+#     - Variable: DEV_API_URL = http://dev.ricknmorty.internal:8080
+#
+# FLUXO:
+#   Push na branch "dev" → dispara este workflow → deploy automático sem aprovação
+
+name: "TP3 - Etapa 5a - Deploy DEV"
+
+on:
+  push:
+    branches:
+      - dev
+
+jobs:
+  deploy-dev:
+    name: Deploy automático para DEV
+    runs-on: ubuntu-latest
+    environment: dev    # vincula ao ambiente "dev" configurado no GitHub
+
+    steps:
+      - name: Checkout do código
+        uses: actions/checkout@v4
+
+      - name: Informações do deploy
+        run: |
+          echo "==============================="
+          echo " Deploy — Ambiente: DEV"
+          echo "==============================="
+          echo "Branch    : ${{ github.ref_name }}"
+          echo "Commit    : ${{ github.sha }}"
+          echo "Autor     : ${{ github.actor }}"
+          echo "API URL   : ${{ vars.DEV_API_URL }}"
+
+      - name: Build das imagens Docker
+        run: docker compose build
+
+      - name: Validar docker-compose
+        run: docker compose config
+
+      - name: Simular push da imagem para registry DEV
+        run: |
+          echo "docker tag ricknmorty-api registry.dev/ricknmorty-api:${{ github.sha }}"
+          echo "docker push registry.dev/ricknmorty-api:${{ github.sha }}"
+          echo "Imagem enviada com sucesso (SHA: ${{ github.sha }})"
+
+      - name: Simular restart do serviço em DEV
+        run: |
+          echo "Reiniciando serviço em ${{ vars.DEV_API_URL }}..."
+          echo "Aguardando health check..."
+          echo "Serviço respondendo em ${{ vars.DEV_API_URL }}/api/characters"
+          echo "✅ Deploy em DEV concluído automaticamente."

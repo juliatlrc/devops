@@ -1,0 +1,59 @@
+# TP3 — Etapa 1: Runner Auto-Hospedado
+#
+# PRÉ-REQUISITO (executar uma vez na máquina local antes de usar este workflow):
+#
+#   1. No GitHub: Settings > Actions > Runners > New self-hosted runner
+#   2. Copiar e executar os comandos gerados na máquina local:
+#
+#      mkdir actions-runner && cd actions-runner
+#      curl -o actions-runner-linux-x64-2.315.0.tar.gz -L \
+#        https://github.com/actions/runner/releases/download/v2.315.0/actions-runner-linux-x64-2.315.0.tar.gz
+#      tar xzf ./actions-runner-linux-x64-2.315.0.tar.gz
+#      ./config.sh --url https://github.com/juliatlrc/devops --token <TOKEN_DO_GITHUB>
+#      ./run.sh
+#
+# O runner ficará visível em Settings > Actions > Runners com status "Idle".
+
+name: "TP3 - Etapa 1 - Self-Hosted Runner"
+
+on:
+  workflow_dispatch:
+
+jobs:
+  demo-self-hosted:
+    name: Executa no runner local
+    runs-on: self-hosted
+
+    steps:
+      - name: Checkout do código
+        uses: actions/checkout@v4
+
+      # Comandos básicos — comprovam que o job rodou na máquina local
+      - name: Informações do sistema operacional
+        run: uname -a
+
+      - name: Versão do Java no runner
+        run: java -version
+
+      - name: Versão do Docker no runner
+        run: docker --version
+
+      - name: Identificação do runner
+        run: |
+          echo "Runner name : ${{ runner.name }}"
+          echo "Runner OS   : ${{ runner.os }}"
+          echo "Workspace   : ${{ github.workspace }}"
+
+      # Instalação de software adicional durante a execução do workflow (requisito da etapa)
+      - name: Instalar jq (software adicional via apt)
+        run: |
+          sudo apt-get update -y -q
+          sudo apt-get install -y jq
+          echo "jq instalado:"
+          jq --version
+
+      - name: Usar jq para validar docker-compose.yml
+        run: |
+          echo "Validando docker-compose.yml com yq/jq..."
+          cat docker-compose.yml | python3 -c "import sys,json,yaml; print(json.dumps(yaml.safe_load(sys.stdin), indent=2))" | jq '.services | keys'
+          echo "Serviços encontrados no docker-compose.yml listados acima."

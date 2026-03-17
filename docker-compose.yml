@@ -21,11 +21,9 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
     volumes:
-      # Volume nomeado — dados sobrevivem ao docker-compose down
       - pgdata:/var/lib/postgresql/data
     networks:
       - ricknmorty-net
-    # SEM "ports:" — porta 5432 não é acessível pelo host (requisito do enunciado)
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d ricknmorty"]
       interval: 10s
@@ -41,14 +39,11 @@ services:
       dockerfile: Dockerfile
     container_name: ricknmorty-api
     environment:
-      # A API usa o nome "db" — Docker resolve via DNS interno da rede
-      # localhost aqui se referiria ao próprio container da API, não ao banco
       SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/ricknmorty
       SPRING_DATASOURCE_USERNAME: postgres
       SPRING_DATASOURCE_PASSWORD: postgres
       SPRING_JPA_HIBERNATE_DDL_AUTO: validate
     ports:
-      # Apenas a API é exposta para o host — banco permanece interno
       - "8080:8080"
     networks:
       - ricknmorty-net
@@ -57,12 +52,10 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
-# ---- Volume nomeado ----
 volumes:
   pgdata:
     driver: local
 
-# ---- Rede interna isolada ----
 networks:
   ricknmorty-net:
     driver: bridge

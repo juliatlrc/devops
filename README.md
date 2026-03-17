@@ -18,6 +18,7 @@ Acesse:
 - `http://localhost:8080/api/characters`
 - `http://localhost:8080/api/episodes`
 - `http://localhost:8080/api/locations`
+- `http://localhost:8080/calc/sqrt?x=16` ← novo (TP3)
 
 ---
 
@@ -43,14 +44,117 @@ adicionando `run: exit 1` em um step do job de build.
 
 Foram realizadas duas execuções distintas do pipeline:
 
-1. **Push automático** — disparado ao fazer `git push` na branch `main`. O workflow iniciou
-   imediatamente sem nenhuma intervenção manual. Ideal para validação contínua de cada commit.
+1. **Push automático** — disparado ao fazer `git push` na branch `main`.
+2. **Execução manual (Run workflow)** — disparada pela aba Actions com parâmetros `run_tests` e `run_lint`.
 
-2. **Execução manual (Run workflow)** — disparada pela aba Actions usando o botão "Run workflow".
-   Permitiu escolher os parâmetros `run_tests` e `run_lint`, dando controle sobre quais
-   verificações executar sem precisar fazer um commit.
+---
 
-**Observação:** A principal diferença entre os dois modos está no controle e contexto.
-O push automático garante que todo código novo seja validado sem depender de ação humana,
-enquanto a execução manual é útil para revalidar o pipeline em situações específicas ou
-testar configurações sem poluir o histórico de commits.
+## 🚀 TP3 — Controle, Segurança e Personalização do Pipeline
+
+### Etapa 1 — Runner Auto-Hospedado
+
+**Arquivo:** `.github/workflows/self-hosted-demo.yml`
+
+O runner foi registrado localmente via:
+```bash
+mkdir actions-runner && cd actions-runner
+curl -o actions-runner-linux-x64-2.315.0.tar.gz -L \
+  https://github.com/actions/runner/releases/download/v2.315.0/actions-runner-linux-x64-2.315.0.tar.gz
+tar xzf ./actions-runner-linux-x64-2.315.0.tar.gz
+./config.sh --url https://github.com/juliatlrc/devops --token <TOKEN>
+./run.sh
+```
+
+O workflow usa `runs-on: self-hosted` e executa `uname -a`, `java -version`, `docker --version`.
+Durante a execução, instala `jq` via `apt-get` como software adicional.
+
+**Para reexecutar:** Actions > TP3 - Etapa 1 - Self-Hosted Runner > Run workflow
+
+---
+
+### Etapa 2 — Variáveis e Secrets
+
+**Arquivo:** `.github/workflows/vars-and-secrets-demo.yml`
+
+**Configurar em Settings > Secrets and variables > Actions:**
+| Tipo | Nome | Valor |
+|------|------|-------|
+| Variable | `APP_MODE` | `production` |
+| Variable | `SUPPORT_EMAIL` | `suporte@ricknmorty.dev` |
+| Secret | `PROD_TOKEN` | `<seu-token>` |
+
+- Variáveis acessadas via `${{ vars.APP_MODE }}` e `${{ vars.SUPPORT_EMAIL }}`
+- Secret acessado via `${{ secrets.PROD_TOKEN }}` — valor mascarado nos logs
+
+**Para reexecutar:** Actions > TP3 - Etapa 2 - Variaveis e Secrets > Run workflow
+
+---
+
+### Etapa 3 — Contextos e Escopos de Variáveis
+
+**Arquivo:** `.github/workflows/env-context-demo.yml`
+
+Demonstra os três níveis de escopo:
+- **workflow-level:** `STAGE=test`, `APP_NAME=ricknmorty-api`
+- **job-level:** `DEPLOY_ENV=staging`, `APP_NAME=ricknmorty-api-job-override` (sobrescreve)
+- **step-level:** `STAGE=production` (sobrescreve), `STEP_ONLY=so-aqui` (local ao step)
+
+Exibe `github.actor`, `github.ref`, `runner.os`, `runner.arch`.
+
+**Para reexecutar:** Actions > TP3 - Etapa 3 - Env Context Demo > Run workflow
+
+---
+
+### Etapa 4 — Permissões do GITHUB_TOKEN
+
+**Arquivo:** `.github/workflows/auto-issue.yml`
+
+O bloco `permissions` eleva `issues: write` mantendo o restante no mínimo:
+```yaml
+permissions:
+  issues: write
+  contents: read
+```
+
+Se `APP_MODE` não estiver definida, o deploy falha e uma issue é criada automaticamente
+via `actions/github-script` usando `${{ secrets.GITHUB_TOKEN }}`.
+
+**Para reexecutar:** Actions > TP3 - Etapa 4 - Permissoes GITHUB_TOKEN > Run workflow
+
+---
+
+### Etapa 5 — Ambientes Dev e Prod
+
+**Arquivos:** `.github/workflows/deploy-dev.yml` e `.github/workflows/deploy-prod.yml`
+
+| Ambiente | Branch | Proteção | Variável |
+|----------|--------|----------|----------|
+| `dev` | `dev` | Nenhuma (automático) | `DEV_API_URL` |
+| `prod` | `main` | Required reviewer (aprovação manual) | `PROD_API_URL` |
+
+- Push em `dev` → deploy imediato
+- Push em `main` → aguarda aprovação em Settings > Environments > prod
+
+**Configurar em Settings > Environments:**
+1. Criar ambiente `dev` com variável `DEV_API_URL`
+2. Criar ambiente `prod` com variável `PROD_API_URL`, secret `PROD_REGISTRY_TOKEN` e reviewer obrigatório
+
+---
+
+### Etapa 6 — Novo Endpoint `/calc/sqrt`
+
+**Arquivos alterados:**
+- `api/src/main/java/com/ricknmorty/api/service/CalculatorService.java` — método `sqrt(double x)`
+- `api/src/main/java/com/ricknmorty/api/controller/CalculatorController.java` — endpoint `GET /calc/sqrt`
+- `api/src/test/java/com/ricknmorty/api/service/CalculatorServiceTest.java` — 7 novos testes
+
+**Uso:**
+```bash
+curl "http://localhost:8080/calc/sqrt?x=16"
+# {"x":16.0,"operation":"sqrt","result":4.0}
+
+curl "http://localhost:8080/calc/sqrt?x=-1"
+# HTTP 400 {"error":"Raiz quadrada de número negativo não é permitida..."}
+```
+
+O pipeline de CI existente executa os testes automaticamente em pushes na `main`.

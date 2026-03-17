@@ -1,0 +1,68 @@
+# TP3 — Etapa 5b: Deploy para o ambiente PROD
+#
+# CONFIGURAR NO GITHUB ANTES DE USAR:
+#   Settings > Environments > New environment > "prod"
+#     - Required reviewers: <seu usuário> (aprovação manual obrigatória antes do deploy)
+#     - Secret:   PROD_REGISTRY_TOKEN = <token-do-registry-de-producao>
+#     - Variable: PROD_API_URL = https://api.ricknmorty.dev
+#
+# FLUXO:
+#   Push na branch "main" → workflow iniciado → aguarda aprovação manual →
+#   aprovador clica em "Review deployments" > "Approve" → job executa
+
+name: "TP3 - Etapa 5b - Deploy PROD"
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy-prod:
+    name: Deploy com aprovação para PROD
+    runs-on: ubuntu-latest
+    environment: prod   # vincula ao ambiente "prod" — bloqueia até aprovação manual
+
+    steps:
+      - name: Checkout do código
+        uses: actions/checkout@v4
+
+      - name: Informações do deploy
+        run: |
+          echo "==============================="
+          echo " Deploy — Ambiente: PROD"
+          echo "==============================="
+          echo "Branch    : ${{ github.ref_name }}"
+          echo "Commit    : ${{ github.sha }}"
+          echo "Autor     : ${{ github.actor }}"
+          echo "API URL   : ${{ vars.PROD_API_URL }}"
+
+      - name: Build das imagens Docker
+        run: docker compose build
+
+      - name: Validar docker-compose
+        run: docker compose config
+
+      # Secret vem do ambiente "prod" — não do repositório global
+      # Isso garante que o token de produção só é acessível após aprovação
+      - name: Autenticar no registry de produção
+        env:
+          REGISTRY_TOKEN: ${{ secrets.PROD_REGISTRY_TOKEN }}
+        run: |
+          if [ -z "$REGISTRY_TOKEN" ]; then
+            echo "ERRO: PROD_REGISTRY_TOKEN não definido no ambiente prod."
+            exit 1
+          fi
+          echo "Autenticado no registry de produção (token presente)."
+
+      - name: Simular push da imagem para registry PROD
+        run: |
+          echo "docker tag ricknmorty-api registry.prod/ricknmorty-api:${{ github.sha }}"
+          echo "docker push registry.prod/ricknmorty-api:${{ github.sha }}"
+          echo "Imagem enviada com sucesso (SHA: ${{ github.sha }})"
+
+      - name: Simular deploy em PROD
+        run: |
+          echo "Aplicando nova versão em ${{ vars.PROD_API_URL }}..."
+          echo "Aguardando health check de produção..."
+          echo "✅ Deploy em PROD concluído após aprovação manual."

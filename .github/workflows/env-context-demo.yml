@@ -1,0 +1,89 @@
+# TP3 — Etapa 3: Contextos e Escopos de Variáveis de Ambiente
+#
+# Demonstra os três níveis de escopo:
+#   1. workflow-level (env no topo do arquivo) — visível em todos os jobs/steps
+#   2. job-level      (env dentro do job)       — visível nos steps daquele job
+#   3. step-level     (env dentro do step)      — visível apenas naquele step
+#
+# Também exibe informações dos contextos somente-leitura do GitHub Actions:
+#   github.actor, github.ref, runner.os, runner.arch, etc.
+
+name: "TP3 - Etapa 3 - Env Context Demo"
+
+on:
+  workflow_dispatch:
+
+# ── Nível 1: WORKFLOW — visível em todos os jobs e steps ──
+env:
+  STAGE: test
+  APP_NAME: ricknmorty-api
+  PIPELINE_VERSION: "3.0"
+
+jobs:
+  env-demo:
+    name: Demonstra escopos de env vars
+    runs-on: ubuntu-latest
+
+    # ── Nível 2: JOB — visível apenas nos steps deste job ──
+    # APP_NAME aqui sobrescreve o APP_NAME do nível workflow
+    env:
+      DEPLOY_ENV: staging
+      APP_NAME: ricknmorty-api-job-override
+
+    steps:
+      # Step 1 — contextos somente-leitura do GitHub (não são env vars)
+      - name: "Exibir contexto do GitHub"
+        run: |
+          echo "================================================"
+          echo " Contexto github.* (somente leitura)"
+          echo "================================================"
+          echo "Usuário que acionou : ${{ github.actor }}"
+          echo "Branch / ref        : ${{ github.ref }}"
+          echo "Evento disparador   : ${{ github.event_name }}"
+          echo "SHA do commit       : ${{ github.sha }}"
+          echo "Repositório         : ${{ github.repository }}"
+          echo ""
+          echo "================================================"
+          echo " Contexto runner.* (somente leitura)"
+          echo "================================================"
+          echo "Sistema operacional : ${{ runner.os }}"
+          echo "Arquitetura         : ${{ runner.arch }}"
+          echo "Nome do runner      : ${{ runner.name }}"
+
+      # Step 2 — variáveis dos níveis workflow e job
+      - name: "Exibir vars de workflow e job"
+        run: |
+          echo "================================================"
+          echo " Nível WORKFLOW"
+          echo "================================================"
+          echo "STAGE            = $STAGE"
+          echo "PIPELINE_VERSION = $PIPELINE_VERSION"
+          echo ""
+          echo "================================================"
+          echo " Nível JOB (APP_NAME sobrescreve o workflow)"
+          echo "================================================"
+          echo "APP_NAME   = $APP_NAME"
+          echo "DEPLOY_ENV = $DEPLOY_ENV"
+
+      # Step 3 — variável de nível step sobrescreve as anteriores
+      - name: "Exibir var sobrescrita no step (STAGE=production)"
+        env:
+          STAGE: production        # sobrescreve STAGE=test do workflow
+          STEP_ONLY: "so-aqui"     # existe SOMENTE neste step
+        run: |
+          echo "================================================"
+          echo " Nível STEP"
+          echo "================================================"
+          echo "STAGE     (step sobrescreve workflow) = $STAGE"
+          echo "APP_NAME  (herda do job)              = $APP_NAME"
+          echo "STEP_ONLY (só existe neste step)      = $STEP_ONLY"
+
+      # Step 4 — confirma que STEP_ONLY não vaza para fora do step anterior
+      - name: "Confirmar que STEP_ONLY não vaza"
+        run: |
+          echo "================================================"
+          echo " Após o step com STEP_ONLY"
+          echo "================================================"
+          echo "STEP_ONLY aqui = '${STEP_ONLY}' (deve estar vazio)"
+          echo "STAGE voltou a = $STAGE (deve ser 'test')"
+          echo "APP_NAME       = $APP_NAME (override do job)"
